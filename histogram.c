@@ -1,6 +1,6 @@
 /* Pthread Lab: Histogram generation
- * Author: Naga Kandasamy
- * Date modified: 10/11/2015
+ * Author: Forest Oden
+ * Date modified: 10/24/2015
  *  *
  *   * compile as follows: 
  *    * gcc -o histogram histogram.c -std=c99 -lpthread -lm
@@ -19,7 +19,7 @@ void check_histogram(int *, int, int);
 void* hist(void*);
 
 #define HISTOGRAM_SIZE 500      /* Number of histrogram bins. */
-#define NUM_THREADS 8           /* Number of threads. */
+#define NUM_THREADS  4          /* Number of threads. */
 
 typedef struct args_for_thread_t{
 	int threadID;
@@ -114,16 +114,13 @@ compute_gold(int *input_data, int *histogram, int num_elements, int histogram_si
 void 
 compute_using_pthreads(int *input_data, int *histogram, int num_elements, int histogram_size)
 {
-	pthread_t main_thread;
 	pthread_t threads[NUM_THREADS];
 	ARGS_FOR_THREAD *args_for_thread;
 	
-	main_thread = pthread_self();
-
-	for(int i = 0; i < histogram_size; i++)
-		histogram[i] = 0;
-
-	for(int i = 0; i < NUM_THREADS; i++){
+	int i;
+	
+	/* Give each thread its private variables and create thread  */
+	for(i = 0; i < NUM_THREADS; i++){
 		args_for_thread = (ARGS_FOR_THREAD *)malloc(sizeof(ARGS_FOR_THREAD));
 		args_for_thread->threadID = i;
 		args_for_thread->histogram_data = histogram;
@@ -135,17 +132,12 @@ compute_using_pthreads(int *input_data, int *histogram, int num_elements, int hi
 			printf("Cannot create thread\n");
 			exit(0);
 			}
-		}
-
-	for(int i = 0; i < NUM_THREADS; i++) {
-		pthread_join(threads[i],NULL);
 	}
 
-	/*for(int i = 0; i < num_elements; i++){
-		printf("Element %d , %d\n", i, histogram[i]);
-	} */
-
-			
+	/* Wait for threads to finish */
+	for(int i = 0; i < NUM_THREADS; i++) {
+		pthread_join(threads[i],NULL);
+	}		
 }
 
 /*Histogram generation logic for each thread. */
@@ -154,32 +146,24 @@ hist(void *this_arg) {
 
 	ARGS_FOR_THREAD *args_for_me = (ARGS_FOR_THREAD *)this_arg;
 	
-	//pthread_t threadID = pthread_self();
-
 	int temp_hist[args_for_me->histogram_size];
+	int i;
 
 	/* Initialize temporary histogram per thread */
-	for(int i = args_for_me->threadID; i < args_for_me->histogram_size; i++)
+	for(i = args_for_me->threadID; i < args_for_me->histogram_size; i++)
 		temp_hist[i]=0;
-
-	for(int i = args_for_me->threadID; i < args_for_me->num_elements; i += NUM_THREADS){
-		//printf("Thread: %d, Data Location: %d\n",args_for_me->threadID,i);
+	/* Start at thread ID and go through input data by jumping NUM_THREADS to get part of the full data  */
+	for(i = args_for_me->threadID; i < args_for_me->num_elements; i += NUM_THREADS)
 		temp_hist[args_for_me->input_data[i]] += 1;
-		//printf("Adding 1 to bin: %d\n",args_for_me->input_data[i]);
-	 	//printf("Histogram bin: %d\n",temp_hist[args_for_me->input_data[i]]);
-		//printf("Input data: %d\n",args_for_me->input_data[i]);
-		//printf("Histogram: %d\n", args_for_me->histogram_data[&args_for_me->input_data[i]]);
+		
+	/* For the entire histogram, lock and add the temp histogram to the shared histogram  */
+	for(i = 0; i < args_for_me->histogram_size; i++)
+	{	if(temp_hist[i] > 0){
+			pthread_mutex_lock(&mutex);
+			args_for_me->histogram_data[i] += temp_hist[i];
+			pthread_mutex_unlock(&mutex);
+		}
 	}
-
-	for(int i = 0; i < args_for_me->histogram_size; i++)
-	{
-		pthread_mutex_lock(&mutex);
-		//printf("Bin: %d, Number: %d\n", i, temp_hist[i]);
-		args_for_me->histogram_data[i] += temp_hist[i];
-		pthread_mutex_unlock(&mutex);
-	}
-
-	//printf("Bin %d: %d\n",threadID, args_for_me->histogram_data[&args_for_me->threadID]);
 }
 /* Helper function to check for correctness of the resulting histogram. */
 void 

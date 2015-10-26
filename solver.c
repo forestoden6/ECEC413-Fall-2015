@@ -189,8 +189,7 @@ int compute_using_pthreads_jacobi(GRID_STRUCT *grid_2)
 			for(i = 0; i < NUM_THREADS; i++)
 				 pthread_join(thread_id[i], NULL);
 				 // Free args_for_thread structures
-			for(i = 0; i < NUM_THREADS; i++)
-				free((void *)args_for_thread);
+			free((void *)args_for_thread);
 			return num_iter;
 		}
 
@@ -389,7 +388,7 @@ void * red_black(void *args){
 					}	
 				}
 				else{
-					for(int j = 2; j < args_for_me->my_grid->dimension; j+=2){
+					for(int j = 2; j < args_for_me->my_grid->dimension-1; j+=2){
 						int pos = i * args_for_me->my_grid->dimension + j;
 						temp = args_for_me->my_grid->element[pos];
 						args_for_me->my_grid->element[pos] = \

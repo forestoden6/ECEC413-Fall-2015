@@ -14,7 +14,7 @@
 #include <math.h>
 #include "grid.h" 
 
-#define NUM_THREADS 2
+#define NUM_THREADS 4
 
 extern int compute_gold(GRID_STRUCT *);
 int compute_using_pthreads_jacobi(GRID_STRUCT *);
@@ -194,9 +194,9 @@ int compute_using_pthreads_jacobi(GRID_STRUCT *grid_2)
 			return num_iter;
 		}
 
-void *jacobi (void *args)
+/*void *jacobi (void *args)
 {
-	/* Typecast the argument to a pointer to the ARGS_FOR_THREAD structure. */
+	/* Typecast the argument to a pointer to the ARGS_FOR_THREAD structure. 
 	ARGS_FOR_THREAD *args_for_me = (ARGS_FOR_THREAD *)args; 		  // print_args(args_for_me)
 	float partial_diff = 0;
 	int dimension = args_for_me->my_grid->dimension;
@@ -237,18 +237,18 @@ void *jacobi (void *args)
 						args_for_me->temp->element[i * dimension + (j + 1)] + \
 						args_for_me->temp->element[i * dimension + (j - 1)]));
 						printf("Fabs: %d\n", fabs(args_for_me->temp->element[i * dimension + j]));
-						printf("my_grid: %d\n", args_for_me->my_grid->element[i * dimension + j]);*/
+						printf("my_grid: %d\n", args_for_me->my_grid->element[i * dimension + j]);
 						
 						partial_diff += fabs(args_for_me->temp->element[i * dimension + j] - args_for_me->my_grid->element[i * dimension + j]);
 					}
 				}
 			}
 
-			/* Accumulate partial sums into the shared variable. */
+			/* Accumulate partial sums into the shared variable. 
 			//pthread_mutex_lock(&mutex);
 			diff += partial_diff;
 			//pthread_mutex_unlock(&mutex);
-			/* Barrier thread synchonization */
+			/* Barrier thread synchonization 
 			barrier_sync(&barrier);
 			printf("Partial diff: %d\n",partial_diff);
 			printf("Iteration %d completed. Diff is: %d\n",num_iter,diff);
@@ -290,12 +290,12 @@ void *jacobi (void *args)
 				}
 		}	
 	}
-		/* Accumulate partial diff into the shared variable. */
+		/* Accumulate partial diff into the shared variable. 
 		pthread_mutex_lock(&mutex);
 		diff += partial_diff;
 		pthread_mutex_unlock(&mutex);
 
-		/* Barrier thread synchonization */
+		/* Barrier thread synchonization 
 		barrier_sync(&barrier);
 
 	if((float)diff/((float)(args_for_me->my_grid->dimension*args_for_me->my_grid->dimension)) < (float)TOLERANCE) {
@@ -305,6 +305,61 @@ void *jacobi (void *args)
 		}
 	}
 return NULL;
+}*/
+
+void * jacobi(void *args){
+	ARGS_FOR_THREAD *args_for_me = (ARGS_FOR_THREAD *)args;
+	
+	done = 0;
+	diff = 0;
+	num_iter = 0;
+	
+	float local_diff = 0;
+	
+	while(done != 1){
+		local_diff = 0;
+		if(num_iter % 2 == 0){
+			for(int i = args_for_me->thread_id + 1; i < args_for_me->my_grid->dimension-1; i+=NUM_THREADS){
+				for(int j = 1; j < args_for_me->my_grid->dimension-1; j++){
+					int pos = i * args_for_me->my_grid->dimension + j;
+					//printf("Test: %f\n",args_for_me->temp->element[pos]);
+					args_for_me->temp->element[pos] = \
+						0.20*(args_for_me->my_grid->element[pos] + \
+						   args_for_me->my_grid->element[(i - 1) * args_for_me->my_grid->dimension + j] +\
+						   args_for_me->my_grid->element[(i + 1) * args_for_me->my_grid->dimension + j] +\
+						   args_for_me->my_grid->element[i * args_for_me->my_grid->dimension + (j + 1)] +\
+						   args_for_me->my_grid->element[i * args_for_me->my_grid->dimension + (j - 1)]);
+					//printf("Test2: %f\n",args_for_me->temp->element[pos]);
+				local_diff += fabs(args_for_me->my_grid->element[pos] - args_for_me->temp->element[pos]); 
+				}
+			}
+		}
+		else{
+			for(int i = args_for_me->thread_id + 1; i < args_for_me->my_grid->dimension-1; i+=NUM_THREADS){
+				for(int j = 1; j < args_for_me->my_grid->dimension-1; j++){
+					int pos = i * args_for_me->my_grid->dimension + j;
+					//printf("Test: %f\n", args_for_me->temp->element[pos]);
+					args_for_me->my_grid->element[pos] = \
+						0.20*(args_for_me->temp->element[pos] + \
+						   args_for_me->temp->element[(i - 1) * args_for_me->temp->dimension + j] +\
+						   args_for_me->temp->element[(i + 1) * args_for_me->temp->dimension + j] +\
+						   args_for_me->temp->element[i * args_for_me->temp->dimension + (j + 1)] +\
+						   args_for_me->temp->element[i * args_for_me->temp->dimension + (j - 1)]);
+					//printf("Test2: %f\n",args_for_me->temp->element[pos]);
+					local_diff += fabs(args_for_me->my_grid->element[pos] - args_for_me->temp->element[pos]); 
+				}
+			}
+		}
+		
+		pthread_mutex_lock(&mutex);
+		diff += local_diff;
+		pthread_mutex_unlock(&mutex);
+		
+		 if((float)diff/((float)(args_for_me->my_grid->dimension*args_for_me->my_grid->dimension)) < (float)TOLERANCE) 
+            		done = 1;
+
+		barrier_sync(&barrier);		
+	}
 }
 
 void * red_black(void *args){
@@ -313,41 +368,13 @@ void * red_black(void *args){
 	diff = 0;
 	num_iter = 0;
 
-	int local_diff;
+	float local_diff;
 	float temp;
 	
 	while(done != 1){
 		local_diff = 0;
 		for(int i = args_for_me->thread_id + 1; i < args_for_me->my_grid->dimension-1; i+=NUM_THREADS){
 			if(is_red == 0){
-				if(args_for_me->thread_id % 2 == 0){
-					for(int j = 0; j < args_for_me->my_grid->dimension-1; j+=2){
-						int pos = i * args_for_me->my_grid->dimension + j;
-						temp = args_for_me->my_grid->element[pos];
-						args_for_me->my_grid->element[pos] = \
-							0.20*(args_for_me->my_grid->element[pos] + \
-							   args_for_me->my_grid->element[(i - 1) * args_for_me->my_grid->dimension + j] +\
-							   args_for_me->my_grid->element[(i + 1) * args_for_me->my_grid->dimension + j] +\
-							   args_for_me->my_grid->element[i * args_for_me->my_grid->dimension + (j + 1)] +\
-							   args_for_me->my_grid->element[i * args_for_me->my_grid->dimension + (j - 1)]);
-						local_diff += fabs(args_for_me->my_grid->element[i * args_for_me->my_grid->dimension + j] - temp); 
-					}	
-				}
-				else{
-					for(int j = 1; j < args_for_me->my_grid->dimension; j+=2){
-						int pos = i * args_for_me->my_grid->dimension + j;
-						temp = args_for_me->my_grid->element[pos];
-						args_for_me->my_grid->element[pos] = \
-							0.20*(args_for_me->my_grid->element[pos] + \
-							   args_for_me->my_grid->element[(i - 1) * args_for_me->my_grid->dimension + j] +\
-							   args_for_me->my_grid->element[(i + 1) * args_for_me->my_grid->dimension + j] +\
-							   args_for_me->my_grid->element[i * args_for_me->my_grid->dimension + (j + 1)] +\
-							   args_for_me->my_grid->element[i * args_for_me->my_grid->dimension + (j - 1)]);
-						local_diff += fabs(args_for_me->my_grid->element[i * args_for_me->my_grid->dimension + j] - temp); 
-					}
-				}
-			}
-			else{
 				if(args_for_me->thread_id % 2 == 0){
 					for(int j = 1; j < args_for_me->my_grid->dimension-1; j+=2){
 						int pos = i * args_for_me->my_grid->dimension + j;
@@ -362,7 +389,35 @@ void * red_black(void *args){
 					}	
 				}
 				else{
-					for(int j = 0; j < args_for_me->my_grid->dimension; j+=2){
+					for(int j = 2; j < args_for_me->my_grid->dimension; j+=2){
+						int pos = i * args_for_me->my_grid->dimension + j;
+						temp = args_for_me->my_grid->element[pos];
+						args_for_me->my_grid->element[pos] = \
+							0.20*(args_for_me->my_grid->element[pos] + \
+							   args_for_me->my_grid->element[(i - 1) * args_for_me->my_grid->dimension + j] +\
+							   args_for_me->my_grid->element[(i + 1) * args_for_me->my_grid->dimension + j] +\
+							   args_for_me->my_grid->element[i * args_for_me->my_grid->dimension + (j + 1)] +\
+							   args_for_me->my_grid->element[i * args_for_me->my_grid->dimension + (j - 1)]);
+						local_diff += fabs(args_for_me->my_grid->element[i * args_for_me->my_grid->dimension + j] - temp); 
+					}
+				}
+			}
+			else{
+				if(args_for_me->thread_id % 2 == 0){
+					for(int j = 2; j < args_for_me->my_grid->dimension-1; j+=2){
+						int pos = i * args_for_me->my_grid->dimension + j;
+						temp = args_for_me->my_grid->element[pos];
+						args_for_me->my_grid->element[pos] = \
+							0.20*(args_for_me->my_grid->element[pos] + \
+							   args_for_me->my_grid->element[(i - 1) * args_for_me->my_grid->dimension + j] +\
+							   args_for_me->my_grid->element[(i + 1) * args_for_me->my_grid->dimension + j] +\
+							   args_for_me->my_grid->element[i * args_for_me->my_grid->dimension + (j + 1)] +\
+							   args_for_me->my_grid->element[i * args_for_me->my_grid->dimension + (j - 1)]);
+						local_diff += fabs(args_for_me->my_grid->element[i * args_for_me->my_grid->dimension + j] - temp); 
+					}	
+				}
+				else{
+					for(int j = 1; j < args_for_me->my_grid->dimension; j+=2){
 						int pos = i * args_for_me->my_grid->dimension + j;
 						temp = args_for_me->my_grid->element[pos];
 						args_for_me->my_grid->element[pos] = \
@@ -435,7 +490,7 @@ main(int argc, char **argv)
 
 	
 	/* Compute the reference solution using the single-threaded version. */
-	//printf("Using the single threaded version to solve the grid. \n");
+	printf("Using the single threaded version to solve the grid. \n");
 	int num_iter = compute_gold(grid_1);
 	printf("Convergence achieved after %d iterations. \n", num_iter);
 
@@ -446,9 +501,9 @@ main(int argc, char **argv)
 
 	
 	/* Use pthreads to solve the equation using the jacobi method in parallel. */
-	/*printf("Using pthreads to solve the grid using the jacobi method. \n");
+	printf("Using pthreads to solve the grid using the jacobi method. \n");
 	num_iter = compute_using_pthreads_jacobi(grid_3);
-	printf("Convergence achieved after %d iterations. \n", num_iter);*/
+	printf("Convergence achieved after %d iterations. \n", num_iter);
 
 	/* Print key statistics for the converged values. */
 	printf("\n");
@@ -490,7 +545,7 @@ void barrier_sync(BARRIER* barrier)
 		else
 			is_red = 1;
 		num_iter++;
-        printf("Iteration %d. Diff: %f. \n", num_iter, diff);
+        	printf("Iteration %d. Diff: %f. \n", num_iter, diff);
 		diff = 0;
 		pthread_cond_broadcast(&(barrier->condition)); 
 	}

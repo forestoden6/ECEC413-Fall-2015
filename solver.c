@@ -26,9 +26,6 @@ void* red_black(void *args);
 typedef struct args_for_thread{
 	int thread_id;
 	int num_elements;
-	int chunk_size;
-	int offset;
-	int endpoint;
 	GRID_STRUCT *my_grid;
 	GRID_STRUCT *temp;
 } ARGS_FOR_THREAD;
@@ -170,9 +167,6 @@ int compute_using_pthreads_jacobi(GRID_STRUCT *grid_2)
 				args_for_thread = (ARGS_FOR_THREAD *)malloc(sizeof(ARGS_FOR_THREAD));
 				args_for_thread->thread_id = i; // Provide thread ID
 				args_for_thread->num_elements = grid_2->num_elements;
-				args_for_thread->chunk_size = (grid_2->dimension-2)/ NUM_THREADS; // Chunk size
-				args_for_thread->offset = (i * args_for_thread->chunk_size + 1); // Starting offset
-				args_for_thread->endpoint = ((i+1)*args_for_thread->chunk_size); //Ending point for no-end thread
 				args_for_thread->my_grid = grid_2;
 				args_for_thread->temp = temp;
 				
@@ -191,165 +185,50 @@ int compute_using_pthreads_jacobi(GRID_STRUCT *grid_2)
 				 // Free args_for_thread structures
 			free((void *)args_for_thread);
 			return num_iter;
-		}
-
-/*void *jacobi (void *args)
-{
-	/* Typecast the argument to a pointer to the ARGS_FOR_THREAD structure. 
-	ARGS_FOR_THREAD *args_for_me = (ARGS_FOR_THREAD *)args; 		  // print_args(args_for_me)
-	float partial_diff = 0;
-	int dimension = args_for_me->my_grid->dimension;
-
-	if(args_for_me->thread_id < (NUM_THREADS-1)){ // this code for all thread except the last one
-		while(!done){ // while not convergen yet
-		    partial_diff = 0;
-			if ((num_iter% 2) == 0 ) {// Even number of iteration
-				for(int i = args_for_me->offset; i <= args_for_me->endpoint; i++){
-					for(int j = 1; j < (dimension-1); j++){
-						// apply Jacobi update rule
-						printf("Before: %d\n", args_for_me->temp->element[i * dimension + j]);
-						args_for_me->temp->element[i * dimension + j] = 0.20*(args_for_me->my_grid->element[i * dimension + j] +
-							args_for_me->my_grid->element[(i - 1) * dimension + j] +
-							args_for_me->my_grid->element[(i + 1) * dimension + j] +
-							args_for_me->my_grid->element[i * dimension + (j + 1)] +
-							args_for_me->my_grid->element[i * dimension + (j - 1)]);
-						printf("After: %d\n",args_for_me->temp->element[i * dimension + j]);
-						partial_diff = partial_diff + fabs(args_for_me->my_grid->element[i * dimension + j] - args_for_me->temp->element[i * dimension + j]);
-					}
-				}
-			}
-
-			else{ // The odd iteration we ping pong between two matrixs
-				for(int i = args_for_me->offset; i<= args_for_me->endpoint; i++){
-					for(int j = 1; j < (dimension - 1); j++){
-						//Apply jacobi rule
-						//
-						args_for_me->my_grid->element[i * dimension + j] = 0.20*(args_for_me->temp->element[i * dimension + j] + \
-						args_for_me->temp->element[(i - 1) * dimension + j] + \
-						args_for_me->temp->element[(i + 1) * dimension + j] + \
-						args_for_me->temp->element[i * dimension + (j + 1)] + \
-						args_for_me->temp->element[i * dimension + (j - 1)]);
-						
-						/*printf("Test2: %d\n",0.20*(args_for_me->temp->element[i * dimension + j] + \
-						args_for_me->temp->element[(i - 1) * dimension + j] + \
-						args_for_me->temp->element[(i + 1) * dimension + j] + \
-						args_for_me->temp->element[i * dimension + (j + 1)] + \
-						args_for_me->temp->element[i * dimension + (j - 1)]));
-						printf("Fabs: %d\n", fabs(args_for_me->temp->element[i * dimension + j]));
-						printf("my_grid: %d\n", args_for_me->my_grid->element[i * dimension + j]);
-						
-						partial_diff += fabs(args_for_me->temp->element[i * dimension + j] - args_for_me->my_grid->element[i * dimension + j]);
-					}
-				}
-			}
-
-			/* Accumulate partial sums into the shared variable. 
-			//pthread_mutex_lock(&mutex);
-			diff += partial_diff;
-			//pthread_mutex_unlock(&mutex);
-			/* Barrier thread synchonization 
-			barrier_sync(&barrier);
-			printf("Partial diff: %d\n",partial_diff);
-			printf("Iteration %d completed. Diff is: %d\n",num_iter,diff);
-			num_iter++;
-
-			if((float)diff/((float)(args_for_me->my_grid->dimension*args_for_me->my_grid->dimension)) < (float)TOLERANCE) {
-           		printf("Done\n"); 
-				done = 1;
-			}
-		}
-	} 
-	else{ //this code use for the last thread that compute the rest elements
-		while(!done){ // Start an iteration
-			partial_diff = 0;
-			if ((num_iter % 2) == 0 ) { // Even number of iteration
-			for(int i = args_for_me->offset; i < (dimension-1); i++){
-				for(int j = 1; j < (dimension-1); j++){
-					//Apply Jacobi update rule
-					args_for_me->temp->element[i * dimension + j] = 0.20*(args_for_me->my_grid->element[i * dimension + j] + \
-					args_for_me->my_grid->element[(i - 1) * dimension + j] + \
-					args_for_me->my_grid->element[(i + 1) * dimension + j] + \
-					args_for_me->my_grid->element[i * dimension + (j + 1)] + \
-					args_for_me->my_grid->element[i * dimension + (j - 1)]);
-					partial_diff = partial_diff + fabs(args_for_me->my_grid->element[i * dimension + j] - args_for_me->temp->element[i * dimension + j]);
-				}
-			}
-		}
-
-		else{ // Odd number of iteration
-		for(int i = args_for_me->offset; i< (dimension -1); i++){
-			for(int j = 1; j < (dimension-1); j++){
-					//Apply Jacobi update rule
-					args_for_me->temp->element[i * dimension + j] = 0.20*(args_for_me->my_grid->element[i * dimension + j] + \
-					args_for_me->my_grid->element[(i - 1) * dimension + j] + \
-					args_for_me->my_grid->element[(i + 1) * dimension + j] + \
-					args_for_me->my_grid->element[i * dimension + (j + 1)] + \
-					args_for_me->my_grid->element[i * dimension + (j - 1)]);
-					partial_diff = partial_diff + fabs(args_for_me->my_grid->element[i * dimension + j] - args_for_me->temp->element[i * dimension + j]);
-				}
-		}	
-	}
-		/* Accumulate partial diff into the shared variable. 
-		pthread_mutex_lock(&mutex);
-		diff += partial_diff;
-		pthread_mutex_unlock(&mutex);
-
-		/* Barrier thread synchonization 
-		barrier_sync(&barrier);
-
-	if((float)diff/((float)(args_for_me->my_grid->dimension*args_for_me->my_grid->dimension)) < (float)TOLERANCE) {
-            		done = 1;
-			printf("Done!");
-	}
-		}
-	}
-return NULL;
-}*/
+		}   
 
 void * jacobi(void *args){
 	ARGS_FOR_THREAD *args_for_me = (ARGS_FOR_THREAD *)args;
-	
+	//Reset global variables after red-black 
 	done = 0;
 	diff = 0;
 	num_iter = 0;
 	
 	float local_diff = 0;
 	
+	/* While not converged */
 	while(done != 1){
 		local_diff = 0;
-		if(num_iter % 2 == 0){
-			for(int i = args_for_me->thread_id + 1; i < args_for_me->my_grid->dimension-1; i+=NUM_THREADS){
-				for(int j = 1; j < args_for_me->my_grid->dimension-1; j++){
+		if(num_iter % 2 == 0){ /* Every even iteration move from my_grid to temp grid  */
+			for(int i = args_for_me->thread_id + 1; i < args_for_me->my_grid->dimension-1; i+=NUM_THREADS){ /* Row */
+				for(int j = 1; j < args_for_me->my_grid->dimension-1; j++){ /* Col */
 					int pos = i * args_for_me->my_grid->dimension + j;
-					//printf("Test: %f\n",args_for_me->temp->element[pos]);
 					args_for_me->temp->element[pos] = \
 						0.20*(args_for_me->my_grid->element[pos] + \
 						   args_for_me->my_grid->element[(i - 1) * args_for_me->my_grid->dimension + j] +\
 						   args_for_me->my_grid->element[(i + 1) * args_for_me->my_grid->dimension + j] +\
 						   args_for_me->my_grid->element[i * args_for_me->my_grid->dimension + (j + 1)] +\
 						   args_for_me->my_grid->element[i * args_for_me->my_grid->dimension + (j - 1)]);
-					//printf("Test2: %f\n",args_for_me->temp->element[pos]);
-				local_diff += fabs(args_for_me->my_grid->element[pos] - args_for_me->temp->element[pos]); 
+				local_diff += fabs(args_for_me->my_grid->element[pos] - args_for_me->temp->element[pos]);
+				/* Store difference in local variable */
 				}
 			}
 		}
-		else{
+		else{ /* Move from temp to my_grid */
 			for(int i = args_for_me->thread_id + 1; i < args_for_me->my_grid->dimension-1; i+=NUM_THREADS){
 				for(int j = 1; j < args_for_me->my_grid->dimension-1; j++){
 					int pos = i * args_for_me->my_grid->dimension + j;
-					//printf("Test: %f\n", args_for_me->temp->element[pos]);
 					args_for_me->my_grid->element[pos] = \
 						0.20*(args_for_me->temp->element[pos] + \
 						   args_for_me->temp->element[(i - 1) * args_for_me->temp->dimension + j] +\
 						   args_for_me->temp->element[(i + 1) * args_for_me->temp->dimension + j] +\
 						   args_for_me->temp->element[i * args_for_me->temp->dimension + (j + 1)] +\
 						   args_for_me->temp->element[i * args_for_me->temp->dimension + (j - 1)]);
-					//printf("Test2: %f\n",args_for_me->temp->element[pos]);
 					local_diff += fabs(args_for_me->my_grid->element[pos] - args_for_me->temp->element[pos]); 
 				}
 			}
 		}
-		
+		/* Lock to write to shared difference */
 		pthread_mutex_lock(&mutex);
 		diff += local_diff;
 		pthread_mutex_unlock(&mutex);
@@ -357,6 +236,7 @@ void * jacobi(void *args){
 		 if((float)diff/((float)(args_for_me->my_grid->dimension*args_for_me->my_grid->dimension)) < (float)TOLERANCE) 
             		done = 1;
 
+		/* Barrier sync and reset difference */
 		barrier_sync(&barrier);		
 	}
 }
@@ -373,9 +253,10 @@ void * red_black(void *args){
 	while(done != 1){
 		local_diff = 0;
 		for(int i = args_for_me->thread_id + 1; i < args_for_me->my_grid->dimension-1; i+=NUM_THREADS){
-			if(is_red == 0){
-				if(args_for_me->thread_id % 2 == 0){
+			if(is_red == 0){ /* Operate on only red points */
+				if(args_for_me->thread_id % 2 == 0){ /* Alternates positions starting with Red or Black */
 					for(int j = 1; j < args_for_me->my_grid->dimension-1; j+=2){
+						/* Advance by 2 points to jump over the black point */
 						int pos = i * args_for_me->my_grid->dimension + j;
 						temp = args_for_me->my_grid->element[pos];
 						args_for_me->my_grid->element[pos] = \
@@ -387,7 +268,7 @@ void * red_black(void *args){
 						local_diff += fabs(args_for_me->my_grid->element[i * args_for_me->my_grid->dimension + j] - temp); 
 					}	
 				}
-				else{
+				else{ /* Starts one position in to start on Red */
 					for(int j = 2; j < args_for_me->my_grid->dimension-1; j+=2){
 						int pos = i * args_for_me->my_grid->dimension + j;
 						temp = args_for_me->my_grid->element[pos];
@@ -401,8 +282,8 @@ void * red_black(void *args){
 					}
 				}
 			}
-			else{
-				if(args_for_me->thread_id % 2 == 0){
+			else{ /* Operate on only black points */
+				if(args_for_me->thread_id % 2 == 0){ /* Starts one position in to start on black point */
 					for(int j = 2; j < args_for_me->my_grid->dimension-1; j+=2){
 						int pos = i * args_for_me->my_grid->dimension + j;
 						temp = args_for_me->my_grid->element[pos];
@@ -431,12 +312,15 @@ void * red_black(void *args){
 			}
 			
 		}
+		/* Lock and store shared difference */
 		pthread_mutex_lock(&mutex);
 		diff += local_diff;
 		pthread_mutex_unlock(&mutex);
 
 		if((float)diff/((float)(args_for_me->my_grid->dimension*args_for_me->my_grid->dimension)) < (float)TOLERANCE) 
-            done = 1;
+           		 done = 1;
+
+		/* Barrier sync, reset difference and alternate red/black */
 		barrier_sync(&barrier);
 	}	
 }
@@ -539,13 +423,13 @@ void barrier_sync(BARRIER* barrier)
 	if(barrier->counter == NUM_THREADS)
 	{
 		barrier->counter = 0;
-		if(is_red == 1)
+		if(is_red == 1) //Change which set of points to operate on
 			is_red = 0;
 		else
 			is_red = 1;
 		num_iter++;
         	printf("Iteration %d. Diff: %f. \n", num_iter, diff);
-		diff = 0;
+		diff = 0; // Reset difference for new iteration
 		pthread_cond_broadcast(&(barrier->condition)); 
 	}
 	else

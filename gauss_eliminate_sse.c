@@ -88,9 +88,9 @@ main(int argc, char** argv) {
 void 
 gauss_eliminate_using_sse(const Matrix A, Matrix U)                  /* Write code to perform gaussian elimination using OpenMP. */
 {
-	int num_elements = (MATRIX_SIZE*MATRIX_SIZE)/4 ;
+	int num_elements = MATRIX_SIZE ;
 	
-	__m128 m0, m1, m2, m3;
+	__m128 m0, m1, m2, m3, m4, m5;
 	
 	__m128 *elements1 = (__m128 *) U.elements;
 	__m128 *elements2 = (__m128 *) U.elements;
@@ -101,27 +101,27 @@ gauss_eliminate_using_sse(const Matrix A, Matrix U)                  /* Write co
  * 				//Set diagonal to 1 - 1 SSE Register
  * 						//Elimination - 4 SSE Registers
  * 								//Set other element to 0 - 1 SSE Register */
-	int i, j, k;
+	unsigned int i, j, k;
 	
 	/* Copy Elements from A to U  */
-	/*for(i = 0; i < num_elements; i++){
+	for(i = 0; i < num_elements; i++){
 		for(j = 0; j < num_elements; j++){
-			m0 = _mm_load_ps(&A.elements[4*(num_elements*i+j)]);
-			_mm_store_ps(&U.elements[4*(num_elements*i+j)], m0);
+			m5 = _mm_load_ps(&A.elements[4*(num_elements*i+j)]);
+			_mm_store_ps(&U.elements[4*(num_elements*i+j)], m5);
 		}
-	}*/
+	}
 
 	/* Gaussian Elimination */
 	for(i = 0; i < num_elements; i++){
 		for(j = i + 1; j < num_elements; j++){
 			//Load point
-			m0 = _mm_load_ps(&A.elements[4*(num_elements * i + j)]);
+			m0 = _mm_load_ps(&U.elements[4*(num_elements * i + j)]);
 			//Load diagonal
-			m1 = _mm_load_ps1(&A.elements[num_elements * i + i]);
+			m1 = _mm_load_ps1(&U.elements[num_elements * i + i]);
 			//Divide values and store in k + j
 			m0 = _mm_div_ps(m0, m1);
 			//Move to next 4 floats
-			_mm_store_ps(&A.elements[4*(num_elements*i+j)], m0);
+			_mm_store_ps(&U.elements[4*(num_elements*i+j)], m0);
 			//elements1++;
 		}
 
@@ -129,12 +129,12 @@ gauss_eliminate_using_sse(const Matrix A, Matrix U)                  /* Write co
 
 		 for(j = i + 1; j < num_elements; j++){
 			for(k = i + 1; k < num_elements; k++){
-				m0 = _mm_load_ps(&A.elements[4 * (num_elements * j + k)]);
-				m1 = _mm_load_ps(&A.elements[4 * (num_elements * j + i)]);
-				m2 = _mm_load_ps(&A.elements[4 * (num_elements * i + k)]);
+				m0 = _mm_load_ps(&U.elements[4 * (num_elements * j + k)]);
+				m1 = _mm_load_ps(&U.elements[4 * (num_elements * j + i)]);
+				m2 = _mm_load_ps(&U.elements[4 * (num_elements * i + k)]);
 				m3 = _mm_mul_ps(m1,m2);
-				m2 = _mm_sub_ps(m3,m0);
-				_mm_store_ps(&U.elements[4*(num_elements*i+j)],m2);
+				m4 = _mm_sub_ps(m3,m0);
+				_mm_store_ps(&U.elements[4*(num_elements*j+k)],m4);
 			}
 			U.elements[num_elements * j + i] = 0;
 		}

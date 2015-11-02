@@ -1,8 +1,8 @@
 /* Gaussian elimination code.
- *  * Author: Forest Oden, 10/26/2015
+ *  * Author: Naga Kandasamy, 10/24/2015
  *   *
  *    * Compile as follows: 
- *     * gcc -o gauss_eliminate gauss_eliminate.c compute_gold.c -fopenmp -std=c99 -O3 -lm
+ *     * gcc -o gauss_eliminate gauss_eliminate.c compute_gold.c -std=c99 -O3 -lm
  *      */
 
 #include <stdlib.h>
@@ -11,7 +11,7 @@
 #include <sys/time.h>
 #include <string.h>
 #include <math.h>
-#include <omp.h>
+#include <xmmintrin.h>
 #include "gauss_eliminate.h"
 
 #define MIN_NUMBER 2
@@ -19,7 +19,7 @@
 
 extern int compute_gold(float*, const float*, unsigned int);
 Matrix allocate_matrix(int num_rows, int num_columns, int init);
-void gauss_eliminate_using_openmp(const Matrix, Matrix);
+void gauss_eliminate_using_sse(const Matrix, Matrix);
 int perform_simple_check(const Matrix);
 void print_matrix(const Matrix);
 float get_random_number(int, int);
@@ -39,7 +39,7 @@ main(int argc, char** argv) {
 	
 	srand(time(NULL));
 		
-    A  = allocate_matrix(MATRIX_SIZE, MATRIX_SIZE, 1);      /* Create a random N x N matrix. */
+	A  = allocate_matrix(MATRIX_SIZE, MATRIX_SIZE, 1);      /* Create a random N x N matrix. */
 	U  = allocate_matrix(MATRIX_SIZE, MATRIX_SIZE, 0);      /* Create a random N x 1 vector. */
 		
 	/* Gaussian elimination using the reference code. */
@@ -63,83 +63,93 @@ main(int argc, char** argv) {
 		exit(0); 
 	}
 	printf("Gaussian elimination using the reference code was successful. \n");
-
-	/* WRITE THIS CODE: Perform the Gaussian elimination using the multi-threaded OpenMP version. 
+	for(int i = 0; i < MATRIX_SIZE * MATRIX_SIZE; i++)
+		printf("Reference: %f\n", reference.elements[i]);
+/* WRITE THIS CODE: Perform the Gaussian elimination using the SSE version. 
  *      * The resulting upper triangular matrix should be returned in U
  *           * */
-	gettimeofday(&start, NULL);
-	printf("Performing gaussian elimination using OpenMP code. \n");
-	gauss_eliminate_using_openmp(A, U);
-	gettimeofday(&stop, NULL);
-
-	printf("CPU run time = %0.2f s. \n", (float) (stop.tv_sec - start.tv_sec + (stop.tv_usec - start.tv_usec)/(float)1000000));
+	gauss_eliminate_using_sse(A, U);
 	
-	/* check if the OpenMP result is equivalent to the expected solution. */
+	for(int i = 0; i < MATRIX_SIZE * MATRIX_SIZE; i++)
+		printf("Reference: %f, SSE: %f\n",reference.elements[i], U.elements[i]);
+	/* Check if the SSE result is equivalent to the expected solution. */
 	int size = MATRIX_SIZE*MATRIX_SIZE;
 	int res = check_results(reference.elements, U.elements, size, 0.001f);
 	printf("Test %s\n", (1 == res) ? "PASSED" : "FAILED");
 
-	free(A.elements); A.elements = NULL;
-	free(U.elements); U.elements = NULL;
-	free(reference.elements); reference.elements = NULL;
+	//free(A.elements); A.elements = NULL;
+	//free(U.elements); U.elements = NULL;
+	//free(reference.elements); reference.elements = NULL;
 
 	return 0;
 }
 
 
 void 
-gauss_eliminate_using_openmp(const Matrix A, Matrix U)                  /* Write code to perform gaussian elimination using OpenMP. */
+gauss_eliminate_using_sse(const Matrix A, Matrix U)                  /* Write code to perform gaussian elimination using OpenMP. */
 {
-	/*Find num_elements A.NUM_COLUMNS * A.NUM_ROWS
- * 	// parallel for copy contents A->U
- * 		// Parallel for loop on each row on U Matrix
- * 				//Inner for loop run by each thread to reduce current row
- * 						//Set principal diagonal entry in U to be 1
- * 								//Eliminate */
-		
-	int num_elements = MATRIX_SIZE;
-	int thread_count = 8;
-	int i,j,k;
-
-	printf("Beginning Parallel Gaussian Eliminater parallel code with %d elements.\n", num_elements);
+	int num_elements = (MATRIX_SIZE*MATRIX_SIZE)/4 ;
 	
+	__m128 m0, m1, m2, m3;
 	
-	#pragma omp parallel num_threads(thread_count) shared(num_elements, U) private (i,j,k) 
-	{	
-		#pragma omp for schedule(dynamic)
-		for (k = 0; k < num_elements; k++){             /* Perform Gaussian elimination in place on the U matrix. */
-			for (j = (k + 1); j < num_elements; j++){   /* Reduce the current row. */
+	__m128 *elements1 = (__m128 *) U.elements;
+	__m128 *elements2 = (__m128 *) U.elements;
+	
+	/*Copy Elements (4 at a time) from A to U
+ * 	//Gaussian Elimination
+ * 		//Reduce Current row
+ * 				//Set diagonal to 1 - 1 SSE Register
+ * 						//Elimination - 4 SSE Registers
+ * 								//Set other element to 0 - 1 SSE Register */
+	int i, j, k;
+	
+	/* Copy Elements from A to U  */
+	for(i = 0; i < num_elements; i++){
+		for(j = 0; j < num_elements; j++){
+			m0 = _mm_load_ps(&A.elements[4*(num_elements*i+j)]);
+			_mm_store_ps(&U.elements[4*(num_elements*i+j)], m0);
+		}
+	}
 
-				/*if (U.elements[num_elements*k + k] == 0){
-					printf("Numerical instability detected. The principal diagonal element is zero. \n");
-					return;
-				}*/
+	/* Gaussian Elimination */
+	for(i = 0; i < num_elements; i++){
+		for(j = i + 1; j < num_elements; j++){
+			//Load point
+			m0 = _mm_load_ps(&U.elements[4*(num_elements * i + j)]);
+			//Load diagonal
+			m1 = _mm_load_ps1(&U.elements[num_elements * i + i]);
+			//Divide values and store in k + j
+			m0  = _mm_div_ps(m0, m1);
+			//Move to next 4 floats
+			_mm_store_ps(&U.elements[4*(num_elements*i+j)], m0);
+			//elements1++;
+		}
 
-				/* Division step. */
-				U.elements[num_elements * k + j] = (float)(U.elements[num_elements * k + j] / U.elements[num_elements * k + k]);
+		U.elements[num_elements * i + i] = 1;
+
+		 for(j = i + 1; j < num_elements; j+=4){
+			for(k = i + 1; k < num_elements; k++){
+				m0 = _mm_load_ps(&U.elements[4 * (num_elements * j + k)]);
+				m1 = _mm_load_ps(&U.elements[4 * (num_elements * j + i)]);
+				m2 = _mm_load_ps(&U.elements[4 * (num_elements * i + k)]);
+				m1 = _mm_mul_ps(m1,m2);
+				m0 = _mm_sub_ps(m0,m1);
+				_mm_store_ps(&U.elements[4*(num_elements*i+j)],m0);
 			}
-			
-			U.elements[num_elements * k + k] = 1;             /* Set the principal diagonal entry in U to be 1. */
-			
-			for (i = (k+1); i < num_elements; i++){
-				for (j = (k+1); j < num_elements; j++)
-					/* Elimnation step. */
-					U.elements[num_elements * i + j] = U.elements[num_elements * i + j] -\
-						(U.elements[num_elements * i + k] * U.elements[num_elements * k + j]);
-				
-				U.elements[num_elements * i + k] = 0; 
-			} 
+			U.elements[num_elements * j + i] = 0;
 		}
 	}
 }
 
-
 int 
 check_results(float *A, float *B, unsigned int size, float tolerance)   /* Check if refernce results match multi threaded results. */
 {
-	for(int i = 0; i < size; i++)
-		if(fabsf(A[i] - B[i]) > tolerance)
+	for(int i = 0; i < size; i++){
+		//printf("A: %f, U: %f\n", A[i], B[i]);
+		if(fabsf(A[i] - B[i]) > tolerance){
 			return 0;
+		}
+	}
 	
     return 1;
 }
@@ -179,6 +189,3 @@ perform_simple_check(const Matrix M){                                   /* Check
 	
     return 1;
 } 
-
-
-

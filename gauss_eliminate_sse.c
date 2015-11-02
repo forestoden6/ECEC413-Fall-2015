@@ -39,7 +39,7 @@ main(int argc, char** argv) {
 	
 	srand(time(NULL));
 		
-    A  = allocate_matrix(MATRIX_SIZE, MATRIX_SIZE, 1);      /* Create a random N x N matrix. */
+	A  = allocate_matrix(MATRIX_SIZE, MATRIX_SIZE, 1);      /* Create a random N x N matrix. */
 	U  = allocate_matrix(MATRIX_SIZE, MATRIX_SIZE, 0);      /* Create a random N x 1 vector. */
 		
 	/* Gaussian elimination using the reference code. */
@@ -63,20 +63,23 @@ main(int argc, char** argv) {
 		exit(0); 
 	}
 	printf("Gaussian elimination using the reference code was successful. \n");
-
-	/* WRITE THIS CODE: Perform the Gaussian elimination using the SSE version. 
+	for(int i = 0; i < MATRIX_SIZE * MATRIX_SIZE; i++)
+		printf("Reference: %f\n", reference.elements[i]);
+/* WRITE THIS CODE: Perform the Gaussian elimination using the SSE version. 
  *      * The resulting upper triangular matrix should be returned in U
  *           * */
 	gauss_eliminate_using_sse(A, U);
-
+	
+	for(int i = 0; i < MATRIX_SIZE * MATRIX_SIZE; i++)
+		printf("Reference: %f, SSE: %f\n",reference.elements[i], U.elements[i]);
 	/* Check if the SSE result is equivalent to the expected solution. */
 	int size = MATRIX_SIZE*MATRIX_SIZE;
 	int res = check_results(reference.elements, U.elements, size, 0.001f);
 	printf("Test %s\n", (1 == res) ? "PASSED" : "FAILED");
 
-	free(A.elements); A.elements = NULL;
-	free(U.elements); U.elements = NULL;
-	free(reference.elements); reference.elements = NULL;
+	//free(A.elements); A.elements = NULL;
+	//free(U.elements); U.elements = NULL;
+	//free(reference.elements); reference.elements = NULL;
 
 	return 0;
 }
@@ -85,7 +88,7 @@ main(int argc, char** argv) {
 void 
 gauss_eliminate_using_sse(const Matrix A, Matrix U)                  /* Write code to perform gaussian elimination using OpenMP. */
 {
-	int num_elements = MATRIX_SIZE / 4;
+	int num_elements = (MATRIX_SIZE*MATRIX_SIZE)/4 ;
 	
 	__m128 m0, m1, m2, m3;
 	
@@ -98,53 +101,55 @@ gauss_eliminate_using_sse(const Matrix A, Matrix U)                  /* Write co
  * 				//Set diagonal to 1 - 1 SSE Register
  * 						//Elimination - 4 SSE Registers
  * 								//Set other element to 0 - 1 SSE Register */
-		
 	int i, j, k;
 	
 	/* Copy Elements from A to U  */
-	for(i = 0; i < num_elements; i++)
-		for(j = 0; j < num_elements; j++)
-			m0 = _mm_load_ps(&A.elements[4*(num_elements*i + j)]);
-			_mm_store_ps(&U.elements[4*(num_elements*i + j)], m0);
+	/*for(i = 0; i < num_elements; i++){
+		for(j = 0; j < num_elements; j++){
+			m0 = _mm_load_ps(&A.elements[4*(num_elements*i+j)]);
+			_mm_store_ps(&U.elements[4*(num_elements*i+j)], m0);
+		}
+	}*/
 
 	/* Gaussian Elimination */
 	for(i = 0; i < num_elements; i++){
 		for(j = i + 1; j < num_elements; j++){
 			//Load point
-			m0 = _mm_load_ps(&U.elements[4 * (num_elements * i + j)]);
+			m0 = _mm_load_ps(&A.elements[4*(num_elements * i + j)]);
 			//Load diagonal
-			m1 = _mm_set_ps1(U.elements[4 * (num_elements * i + i)]);
-			//Divide values
-			//Store in k + j
-			*elements1  = _mm_div_ps(m0, m1);
-			elements1++;
+			m1 = _mm_load_ps1(&A.elements[num_elements * i + i]);
+			//Divide values and store in k + j
+			m0 = _mm_div_ps(m0, m1);
+			//Move to next 4 floats
+			_mm_store_ps(&A.elements[4*(num_elements*i+j)], m0);
+			//elements1++;
 		}
 
 		U.elements[num_elements * i + i] = 1;
 
-		for(j = i + 1; j < num_elements; j++){
+		 for(j = i + 1; j < num_elements; j++){
 			for(k = i + 1; k < num_elements; k++){
-				m0 = _mm_load_ps(&U.elements[4 * (num_elements * j + k)]);
-				m1 = _mm_load_ps(&U.elements[4 * (num_elements * j + i)]);
-				m2 = _mm_load_ps(&U.elements[4 * (num_elements * i + k)]);
-				m1 = _mm_mul_ps(m1,m2);
-				*elements2 = _mm_sub_ps(m0,m1);
+				m0 = _mm_load_ps(&A.elements[4 * (num_elements * j + k)]);
+				m1 = _mm_load_ps(&A.elements[4 * (num_elements * j + i)]);
+				m2 = _mm_load_ps(&A.elements[4 * (num_elements * i + k)]);
+				m3 = _mm_mul_ps(m1,m2);
+				m2 = _mm_sub_ps(m3,m0);
+				_mm_store_ps(&U.elements[4*(num_elements*i+j)],m2);
 			}
 			U.elements[num_elements * j + i] = 0;
-			elements2++;
 		}
 	}
-
-	
 }
-
 
 int 
 check_results(float *A, float *B, unsigned int size, float tolerance)   /* Check if refernce results match multi threaded results. */
 {
-	for(int i = 0; i < size; i++)
-		if(fabsf(A[i] - B[i]) > tolerance)
+	for(int i = 0; i < size; i++){
+		//printf("A: %f, U: %f\n", A[i], B[i]);
+		if(fabsf(A[i] - B[i]) > tolerance){
 			return 0;
+		}
+	}
 	
     return 1;
 }
@@ -184,6 +189,3 @@ perform_simple_check(const Matrix M){                                   /* Check
 	
     return 1;
 } 
-
-
-

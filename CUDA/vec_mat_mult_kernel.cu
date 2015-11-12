@@ -53,21 +53,20 @@ __global__ void vec_mat_kernel_optimized(float *Ad, float *Xd, float *Yd)
 	double Y_temp = 0;
 	
 	while(i < MATRIX_SIZE){
-		if(i + threadX < MATRIX_SIZE && row < MATRIX_SIZE)
+		if(i + threadY < MATRIX_SIZE && row < MATRIX_SIZE)
 			A_tile[threadY][threadX] = Ad[row * MATRIX_SIZE + i + threadX];
 		else
 			A_tile[threadY][threadX] = 0.0f;
 			
 		if(threadX < 1 && col < MATRIX_SIZE)
-			X_tile[threadY] = Xd[(i+threadY)*MATRIX_SIZE + col];
-		/*else
-			X_tile[threadY][threadX] = 0.0f;*/
+			X_tile[threadY] = Xd[i+threadY];
+		//else
+		//	X_tile[threadY] = 0.0f;
 			
 		__syncthreads();
 		
-		if(threadX == 0)
-			for(int temp = 0; temp < TILE_SIZE; temp++)
-				Y_temp += A_tile[threadY][temp] * X_tile[temp];
+		for(int temp = 0; temp < TILE_SIZE; temp++)
+			Y_temp += A_tile[threadY][temp] * X_tile[temp];
 			
 		__syncthreads();
 		

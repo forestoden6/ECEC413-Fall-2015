@@ -69,7 +69,7 @@ main(int argc, char** argv) {
 
 	
 	// Perform the vector-matrix multiplication on the GPU using global memory
-    // Return the results in Y_gpu_1
+    	// Return the results in Y_gpu_1
 	vec_mat_mult_on_device_using_global_memory(A, X, Y_gpu_1);
    
 	// check if the device result is equivalent to the expected solution
@@ -135,9 +135,9 @@ vec_mat_mult_on_device_using_global_memory(const Matrix A, const Matrix X, Matri
 	
 	copy_matrix_from_device(Y, Yd);
 	//print_matrix(Y);
-	/* cudaFree(&A->elements);
-	cudaFree(&X->elements);
-	cudaFree(&Y->elements); */
+	cudaFree(Ad.elements);
+	cudaFree(Xd.elements);
+	cudaFree(Yd.elements);
 }
 
 // Complete the functionality of vector-matrix multiplication using the GPU
@@ -166,8 +166,8 @@ vec_mat_mult_on_device_using_shared_memory(const Matrix A, const Matrix X, Matri
 	struct timeval start, stop;	
 	gettimeofday(&start, NULL);
 
-	printf("Performing multiplication using global memory. \n");
-	vec_mat_kernel_naive<<< grid, threads >>>(Ad.elements, Xd.elements, Yd.elements);
+	printf("Performing multiplication using shared memory. \n");
+	vec_mat_kernel_optimized<<< grid, threads >>>(Ad.elements, Xd.elements, Yd.elements);
 	cudaThreadSynchronize();
 	
 	gettimeofday(&stop, NULL);
@@ -177,9 +177,9 @@ vec_mat_mult_on_device_using_shared_memory(const Matrix A, const Matrix X, Matri
 	
 	copy_matrix_from_device(Y, Yd);
 	//print_matrix(Y);
-	/* cudaFree(&A->elements);
-	cudaFree(&X->elements);
-	cudaFree(&Y->elements); */
+	cudaFree(Ad.elements);
+	cudaFree(Xd.elements);
+	cudaFree(Yd.elements);
 }
 
 

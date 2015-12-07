@@ -114,6 +114,10 @@ compute_on_device(GRID_STRUCT *my_grid)
 	float* diff_d = NULL;
 	cudaMalloc((void**) &diff_d, sizeof(float) * my_grid->num_elements);
 	
+	int *mutex = NULL;
+	cudaMalloc((void **)&mutex, sizeof(int));
+	cudaMemset(mutex, 0, sizeof(int));
+	
 	dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
 	dim3 dimGrid(GRID_DIMENSION/BLOCK_SIZE,GRID_DIMENSION/BLOCK_SIZE);
 	
@@ -129,7 +133,7 @@ compute_on_device(GRID_STRUCT *my_grid)
 	
 	while(!done && num_iter < 200)
 	{
-		solver_kernel_naive<<< dimGrid, dimBlock >>>(grid1_d,grid2_d, GRID_DIMENSION, diff_d);
+		solver_kernel_naive<<< dimGrid, dimBlock >>>(grid1_d,grid2_d, GRID_DIMENSION, diff_d, mutex);
 		cudaThreadSynchronize();
 		float* temp = grid1_d;
 		grid1_d = grid2_d;
@@ -150,7 +154,7 @@ compute_on_device(GRID_STRUCT *my_grid)
 		fprintf(stderr, "CUDA Error!:: %s\n", str);
 		getchar();
 	}
-	
+	/*
 	/////////////////////////////////////////////////////////////////////
 	//Texture Memory
 	/////////////////////////////////////////////////////////////////////
@@ -185,13 +189,13 @@ compute_on_device(GRID_STRUCT *my_grid)
 		str = cudaGetErrorString(cudaStatus);
 		fprintf(stderr, "CUDA Error!:: %s\n", str);
 		getchar();
-	}
+	} */
 	
 	cudaFree(grid1_d);
 	cudaFree(grid2_d);
 	cudaFree(diff_d);
 	
-	cudaUnbindTexture(inputTex2D);
+	//cudaUnbindTexture(inputTex2D);
 	
 	free(grid2_h);
 }

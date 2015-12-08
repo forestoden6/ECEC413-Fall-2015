@@ -156,11 +156,14 @@ compute_on_device(GRID_STRUCT *my_grid)
 		gettimeofday(&stop, NULL);
 		time += (float)(stop.tv_sec - start.tv_sec + (stop.tv_usec - start.tv_usec)/(float)1000000);
 
-		//printf("Difference: %f, Iteration: %d\n", diff/(my_grid->num_elements), num_iter);
+		printf("Difference: %f, Iteration: %d\n", diff/(my_grid->num_elements), num_iter);
 
 		diff=0;
 		num_iter++;
 	}
+	
+	printf("Convergence achieved on the GPU using global memory after %d iterations. \n", num_iter);
+
 	
 	printf("Execution time = %fs. \n", time);
 	
@@ -183,10 +186,9 @@ compute_on_device(GRID_STRUCT *my_grid)
 	cudaMemset(grid2_d, 0.0f, my_grid->num_elements);
 	cudaMemset(diff_d, 0.0f, my_grid->num_elements);
 	memset(diff_h, 0.0f, my_grid->num_elements);
-	cudaChannelFormatDesc desc = cudaCreateChannelDesc<float>();
-	cudaBindTexture2D(NULL, inputTex1D, grid1_d, desc, my_grid->dimension, my_grid->dimension, my_grid->dimension * sizeof(float));
-	cudaBindTexture2D(NULL, outputTex1D, grid2_d, desc, my_grid->dimension, my_grid->dimension, my_grid->dimension * sizeof(float));
-	cudaBindTexture2D(NULL, diffTex1D, diff_d, desc, my_grid->dimension, my_grid->dimension, my_grid->dimension * sizeof(float));
+	cudaBindTexture(NULL, inputTex1D, grid1_d, my_grid->num_elements * sizeof(float));
+	cudaBindTexture(NULL, outputTex1D, grid2_d, my_grid->num_elements * sizeof(float));
+	cudaBindTexture(NULL, diffTex1D, diff_d, my_grid->num_elements * sizeof(float));
 
 	
 	printf("Solving using GPU Texture Memory. \n");
@@ -212,17 +214,19 @@ compute_on_device(GRID_STRUCT *my_grid)
 		cudaMemcpy(diff_h, diff_d, sizeof(float)*my_grid->num_elements, cudaMemcpyDeviceToHost);
 		gettimeofday(&start, NULL);
 		for(int i = 0; i < my_grid->num_elements; i++)
-			diff += diff_h[i];
+				diff += diff_h[i];
 		if(diff/(my_grid->num_elements) < (float) TOLERANCE)
-			done = 1;
+				done = 1;
 		gettimeofday(&stop, NULL);
 		time += (float)(stop.tv_sec - start.tv_sec + (stop.tv_usec - start.tv_usec)/(float)1000000);
-
-		//printf("Difference: %f, Iteration: %d\n", diff/(my_grid->num_elements), num_iter);
+		printf("Difference: %f, Iteration: %d\n", diff/(my_grid->num_elements), num_iter);
 
 		diff=0;
 		num_iter++;
 	}
+	
+	printf("Convergence achieved on the GPU using texture memory after %d iterations. \n", num_iter);
+
 	
 	printf("Execution time = %fs. \n", time);
 	
@@ -242,9 +246,9 @@ compute_on_device(GRID_STRUCT *my_grid)
 	cudaFree(grid2_d);
 	cudaFree(diff_d);
 	
-	/*cudaUnbindTexture(inputTex1D);
+	cudaUnbindTexture(inputTex1D);
 	cudaUnbindTexture(outputTex1D);
-	cudaUnbindTexture(diffTex1D); */
+	cudaUnbindTexture(diffTex1D); 
 
 	
 	free(grid2_h);

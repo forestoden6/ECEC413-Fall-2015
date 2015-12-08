@@ -26,9 +26,9 @@ solver_kernel_naive(float* input, float* output, int N, float* globalDiff, int *
 			input[x*N + (y-1)] + input[x*N + (y+1)]);
 			
 	
-	runningSums[tx*BLOCK_SIZE+ty] = fabsf(output[x*N + y] - input[x*N + y]); 
+	globalDiff[x*N+y] = fabsf(output[x*N + y] - input[x*N + y]); 
 	
-	__syncthreads();
+	/*__syncthreads();
 	
 	for(int stride = (BLOCK_SIZE*BLOCK_SIZE)/2; stride > 0; stride /= 2)
 	{
@@ -41,7 +41,7 @@ solver_kernel_naive(float* input, float* output, int N, float* globalDiff, int *
 		lock(mutex);
 		globalDiff[0] += runningSums[0] ;
 		unlock(mutex);
-	}
+	}*/
 	
 }
 

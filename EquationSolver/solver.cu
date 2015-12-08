@@ -106,11 +106,12 @@ compute_on_device(GRID_STRUCT *my_grid)
 	float* grid2_d = NULL;
 	cudaMalloc((void**) &grid2_d, sizeof(float) * my_grid->num_elements);
 	
+	float* grid1_h = (float *)malloc(sizeof(float) * my_grid->num_elements);
 	float* grid1_d = NULL;
 	cudaMalloc((void**) &grid1_d, sizeof(float) * my_grid->num_elements);
 	cudaMemcpy(grid1_d, my_grid->element, sizeof(float) * my_grid->num_elements, cudaMemcpyHostToDevice);
 	
-	float diff_h = 0.0f;
+	float* diff_h = (float *)malloc(sizeof(float) * my_grid->num_elements);
 	float* diff_d = NULL;
 	cudaMalloc((void**) &diff_d, sizeof(float) * my_grid->num_elements);
 	
@@ -129,20 +130,25 @@ compute_on_device(GRID_STRUCT *my_grid)
 	
 	int done = 0;
 	int num_iter = 0;
+	float diff = 0.0f;
 	//for(int i = 0; i < 100; i++)
 	
-	while(!done && num_iter < 200)
+	while(!done && num_iter < 100)
 	{
 		solver_kernel_naive<<< dimGrid, dimBlock >>>(grid1_d,grid2_d, GRID_DIMENSION, diff_d, mutex);
 		cudaThreadSynchronize();
 		float* temp = grid1_d;
 		grid1_d = grid2_d;
 		grid2_d = temp;
-		cudaMemcpy(&diff_h, diff_d, sizeof(float), cudaMemcpyDeviceToHost);
-		if(diff_h/((my_grid->dimension*my_grid->dimension)) < (float) TOLERANCE)
+		cudaMemcpy(diff_h, diff_d, sizeof(float)*my_grid->num_elements, cudaMemcpyDeviceToHost);
+		for(int i = 0; i < my_grid->num_elements; i++)
+			diff += diff_h[i];
+		if(diff/(my_grid->num_elements) < (float) TOLERANCE)
 			done = 1;
+		printf("Difference: %f, Iteration: %d\n", diff/(my_grid->num_elements), num_iter);
+
+		diff=0;
 		num_iter++;
-		printf("Difference: %f, Iteration: %d\n", diff_h/((my_grid->dimension*my_grid->dimension)), num_iter);
 	}
 	check_for_error("KERNEL FAILURE");
 

@@ -7,7 +7,7 @@ Date: 12/7/2015
 #include <stdio.h>
 #include <string.h>
 #include <malloc.h>
-#include <time.h>
+#include <sys/time.h>
 #include <stdlib.h>
 #include <math.h>
 #include "grid.h" // This file defines the grid data structure
@@ -105,15 +105,17 @@ compute_on_device(GRID_STRUCT *my_grid)
 	float* grid2_h = (float *)malloc(sizeof(float) * my_grid->num_elements);
 	float* grid2_d = NULL;
 	cudaMalloc((void**) &grid2_d, sizeof(float) * my_grid->num_elements);
-	
+	cudaMemset(grid2_d, 0.0f, my_grid->num_elements);
+
 	float* grid1_h = (float *)malloc(sizeof(float) * my_grid->num_elements);
 	float* grid1_d = NULL;
 	cudaMalloc((void**) &grid1_d, sizeof(float) * my_grid->num_elements);
 	cudaMemcpy(grid1_d, my_grid->element, sizeof(float) * my_grid->num_elements, cudaMemcpyHostToDevice);
 	
-	float* diff_h = (float *)malloc(sizeof(float) * my_grid->num_elements);
+	float* diff_h = (float *)calloc(my_grid->num_elements,sizeof(float) * my_grid->num_elements);
 	float* diff_d = NULL;
 	cudaMalloc((void**) &diff_d, sizeof(float) * my_grid->num_elements);
+	cudaMemset(diff_d, 0.0f, my_grid->num_elements);
 	
 	int *mutex = NULL;
 	cudaMalloc((void **)&mutex, sizeof(int));
@@ -132,24 +134,39 @@ compute_on_device(GRID_STRUCT *my_grid)
 	int num_iter = 0;
 	float diff = 0.0f;
 	//for(int i = 0; i < 100; i++)
+	struct timeval start, stop;	
+	float time = 0.0f;
 	
-	while(!done && num_iter < 100)
+	while(!done)
 	{
-		solver_kernel_naive<<< dimGrid, dimBlock >>>(grid1_d,grid2_d, GRID_DIMENSION, diff_d, mutex);
+		gettimeofday(&start, NULL);
+		solver_kernel_naive<<< dimGrid, dimBlock >>>(grid1_d,grid2_d, GRID_DIMENSION, diff_d);
 		cudaThreadSynchronize();
+
+		gettimeofday(&stop, NULL);
+		
+		time += (float)(stop.tv_sec - start.tv_sec + (stop.tv_usec - start.tv_usec)/(float)1000000);
+
 		float* temp = grid1_d;
 		grid1_d = grid2_d;
 		grid2_d = temp;
 		cudaMemcpy(diff_h, diff_d, sizeof(float)*my_grid->num_elements, cudaMemcpyDeviceToHost);
+		gettimeofday(&start, NULL);
 		for(int i = 0; i < my_grid->num_elements; i++)
 			diff += diff_h[i];
 		if(diff/(my_grid->num_elements) < (float) TOLERANCE)
 			done = 1;
+		gettimeofday(&stop, NULL);
+		time += (float)(stop.tv_sec - start.tv_sec + (stop.tv_usec - start.tv_usec)/(float)1000000);
+
 		printf("Difference: %f, Iteration: %d\n", diff/(my_grid->num_elements), num_iter);
 
 		diff=0;
 		num_iter++;
 	}
+	
+	printf("Execution time = %fs. \n", time);
+	
 	check_for_error("KERNEL FAILURE");
 
 	cudaError_t cudaStatus = cudaMemcpy(my_grid->element, grid1_d, sizeof(float) * my_grid->num_elements, cudaMemcpyDeviceToHost);
@@ -160,32 +177,58 @@ compute_on_device(GRID_STRUCT *my_grid)
 		fprintf(stderr, "CUDA Error!:: %s\n", str);
 		getchar();
 	}
-	/*
+	
 	/////////////////////////////////////////////////////////////////////
 	//Texture Memory
 	/////////////////////////////////////////////////////////////////////
 	
 	cudaMemcpy(grid1_d, my_grid->element, sizeof(float) * my_grid->num_elements, cudaMemcpyHostToDevice);
+	cudaMemset(grid2_d, 0.0f, my_grid->num_elements);
+	cudaMemset(diff_d, 0.0f, my_grid->num_elements);
+	memset(diff_h, 0.0f, my_grid->num_elements);
 	cudaChannelFormatDesc desc = cudaCreateChannelDesc<float>();
 	cudaBindTexture2D(NULL, inputTex2D, grid1_d, desc, my_grid->dimension, my_grid->dimension, my_grid->dimension * sizeof(float));
+	cudaBindTexture2D(NULL, outputTex2D, grid2_d, desc, my_grid->dimension, my_grid->dimension, my_grid->dimension * sizeof(float));
+	cudaBindTexture2D(NULL, diffTex2D, diff_d, desc, my_grid->dimension, my_grid->dimension, my_grid->dimension * sizeof(float));
+
+	
+	printf("Solving using GPU Texture Memory. \n");
 	
 	done = 0;
 	num_iter = 0;
+	diff = 0.0f;
+	time = 0.0f;
 	
-	printf("Solving using GPU Texture Memory. \n");
-	while(!done && num_iter < 200)
+	while(!done)
 	{
+		gettimeofday(&start, NULL);
 		solver_kernel_optimized<<< dimGrid, dimBlock >>>(grid1_d,grid2_d, GRID_DIMENSION, diff_d);
 		cudaThreadSynchronize();
+
+		gettimeofday(&stop, NULL);
+		
+		time += (float)(stop.tv_sec - start.tv_sec + (stop.tv_usec - start.tv_usec)/(float)1000000);
+
 		float* temp = grid1_d;
 		grid1_d = grid2_d;
 		grid2_d = temp;
-		cudaMemcpy(&diff_h, diff_d, sizeof(float), cudaMemcpyDeviceToHost);
-		if(diff_h/((my_grid->dimension*my_grid->dimension)) < (float) TOLERANCE)
+		cudaMemcpy(diff_h, diff_d, sizeof(float)*my_grid->num_elements, cudaMemcpyDeviceToHost);
+		gettimeofday(&start, NULL);
+		for(int i = 0; i < my_grid->num_elements; i++)
+			diff += diff_h[i];
+		if(diff/(my_grid->num_elements) < (float) TOLERANCE)
 			done = 1;
+		gettimeofday(&stop, NULL);
+		time += (float)(stop.tv_sec - start.tv_sec + (stop.tv_usec - start.tv_usec)/(float)1000000);
+
+		printf("Difference: %f, Iteration: %d\n", diff/(my_grid->num_elements), num_iter);
+
+		diff=0;
 		num_iter++;
-		printf("Difference: %f, Iteration: %d\n", diff_h/((my_grid->dimension*my_grid->dimension)), num_iter);
 	}
+	
+	printf("Execution time = %fs. \n", time);
+	
 	check_for_error("KERNEL FAILURE");
 
 	cudaStatus = cudaMemcpy(my_grid->element, grid1_d, sizeof(float) * my_grid->num_elements, cudaMemcpyDeviceToHost);
@@ -195,7 +238,8 @@ compute_on_device(GRID_STRUCT *my_grid)
 		str = cudaGetErrorString(cudaStatus);
 		fprintf(stderr, "CUDA Error!:: %s\n", str);
 		getchar();
-	} */
+	}
+	
 	
 	cudaFree(grid1_d);
 	cudaFree(grid2_d);
@@ -221,8 +265,14 @@ main(int argc, char **argv)
 
  	create_grids(grid_for_cpu, grid_for_gpu); // Create the grids and populate them with the same set of random values
 	
+	struct timeval start, stop;	
+	gettimeofday(&start, NULL);
+	
 	printf("Using the cpu to solve the grid. \n");
 	compute_gold(grid_for_cpu);  // Use CPU to solve 
+	
+	gettimeofday(&stop, NULL);
+	printf("Execution time = %fs. \n", (float)(stop.tv_sec - start.tv_sec + (stop.tv_usec - start.tv_usec)/(float)1000000));
 
 	// Use the GPU to solve the equation
 	compute_on_device(grid_for_gpu);

@@ -8,12 +8,14 @@
 __device__ void lock(int *mutex);
 __device__ void unlock(int *mutex); 
 
-texture<float, 2>inputTex2D;
-texture<float, 2>outputTex2D;
-texture<float, 2>diffTex2D;
+texture<float, 1>inputTex1D;
+texture<float, 1>outputTex1D;
+texture<float, 1>diffTex1D;
 
 __global__ void 
 solver_kernel_naive(float* input, float* output, int N, float* globalDiff){
+
+	__shared__ float runningSums[BLOCK_SIZE*BLOCK_SIZE];
 	
 	unsigned int tx = threadIdx.x;
 	unsigned int x = blockIdx.x * blockDim.x + tx;
@@ -29,7 +31,6 @@ solver_kernel_naive(float* input, float* output, int N, float* globalDiff){
 		output[x*N+y] = input[x*N+y];
 			
 	globalDiff[x*N+y] = fabsf(output[x*N + y] - input[x*N + y]); 
-	
 }
 
 __global__ void 

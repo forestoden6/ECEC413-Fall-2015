@@ -101,6 +101,13 @@ create_grids(GRID_STRUCT *grid_for_cpu, GRID_STRUCT *grid_for_gpu)
 void 
 compute_on_device(GRID_STRUCT *my_grid)
 {
+
+	int done = 0;
+	int num_iter = 0;
+	float diff = 0.0f;
+	struct timeval start, stop;	
+	float time = 0.0f;
+	cudaError_t cudaStatus;
 	
 	float* grid2_h = (float *)malloc(sizeof(float) * my_grid->num_elements);
 	float* grid2_d = NULL;
@@ -112,30 +119,20 @@ compute_on_device(GRID_STRUCT *my_grid)
 	cudaMalloc((void**) &grid1_d, sizeof(float) * my_grid->num_elements);
 	cudaMemcpy(grid1_d, my_grid->element, sizeof(float) * my_grid->num_elements, cudaMemcpyHostToDevice);
 	
-	float* diff_h = (float *)calloc(my_grid->num_elements,sizeof(float) * my_grid->num_elements);
+	float* diff_h = (float *)malloc(sizeof(float) * my_grid->num_elements);
 	float* diff_d = NULL;
 	cudaMalloc((void**) &diff_d, sizeof(float) * my_grid->num_elements);
 	cudaMemset(diff_d, 0.0f, my_grid->num_elements);
 	
-	int *mutex = NULL;
-	cudaMalloc((void **)&mutex, sizeof(int));
-	cudaMemset(mutex, 0, sizeof(int));
-	
 	dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
 	dim3 dimGrid(GRID_DIMENSION/BLOCK_SIZE,GRID_DIMENSION/BLOCK_SIZE);
-	
+	/*
 	/////////////////////////////////////////////////////////////////////
 	//Using Global Memory
 	/////////////////////////////////////////////////////////////////////
 
 	printf("Solving using GPU Global Memory. \n");
 	
-	int done = 0;
-	int num_iter = 0;
-	float diff = 0.0f;
-	//for(int i = 0; i < 100; i++)
-	struct timeval start, stop;	
-	float time = 0.0f;
 	
 	while(!done)
 	{
@@ -159,7 +156,7 @@ compute_on_device(GRID_STRUCT *my_grid)
 		gettimeofday(&stop, NULL);
 		time += (float)(stop.tv_sec - start.tv_sec + (stop.tv_usec - start.tv_usec)/(float)1000000);
 
-		printf("Difference: %f, Iteration: %d\n", diff/(my_grid->num_elements), num_iter);
+		//printf("Difference: %f, Iteration: %d\n", diff/(my_grid->num_elements), num_iter);
 
 		diff=0;
 		num_iter++;
@@ -169,7 +166,7 @@ compute_on_device(GRID_STRUCT *my_grid)
 	
 	check_for_error("KERNEL FAILURE");
 
-	cudaError_t cudaStatus = cudaMemcpy(my_grid->element, grid1_d, sizeof(float) * my_grid->num_elements, cudaMemcpyDeviceToHost);
+	cudaStatus = cudaMemcpy(my_grid->element, grid1_d, sizeof(float) * my_grid->num_elements, cudaMemcpyDeviceToHost);
 	if (cudaStatus != cudaSuccess) {
 		fprintf(stderr, "cudaMemcpy failed!");
 		const char *str = (char*) malloc(1024); // To store error string
@@ -177,7 +174,7 @@ compute_on_device(GRID_STRUCT *my_grid)
 		fprintf(stderr, "CUDA Error!:: %s\n", str);
 		getchar();
 	}
-	
+	*/
 	/////////////////////////////////////////////////////////////////////
 	//Texture Memory
 	/////////////////////////////////////////////////////////////////////
@@ -187,9 +184,9 @@ compute_on_device(GRID_STRUCT *my_grid)
 	cudaMemset(diff_d, 0.0f, my_grid->num_elements);
 	memset(diff_h, 0.0f, my_grid->num_elements);
 	cudaChannelFormatDesc desc = cudaCreateChannelDesc<float>();
-	cudaBindTexture2D(NULL, inputTex2D, grid1_d, desc, my_grid->dimension, my_grid->dimension, my_grid->dimension * sizeof(float));
-	cudaBindTexture2D(NULL, outputTex2D, grid2_d, desc, my_grid->dimension, my_grid->dimension, my_grid->dimension * sizeof(float));
-	cudaBindTexture2D(NULL, diffTex2D, diff_d, desc, my_grid->dimension, my_grid->dimension, my_grid->dimension * sizeof(float));
+	cudaBindTexture2D(NULL, inputTex1D, grid1_d, desc, my_grid->dimension, my_grid->dimension, my_grid->dimension * sizeof(float));
+	cudaBindTexture2D(NULL, outputTex1D, grid2_d, desc, my_grid->dimension, my_grid->dimension, my_grid->dimension * sizeof(float));
+	cudaBindTexture2D(NULL, diffTex1D, diff_d, desc, my_grid->dimension, my_grid->dimension, my_grid->dimension * sizeof(float));
 
 	
 	printf("Solving using GPU Texture Memory. \n");
@@ -221,7 +218,7 @@ compute_on_device(GRID_STRUCT *my_grid)
 		gettimeofday(&stop, NULL);
 		time += (float)(stop.tv_sec - start.tv_sec + (stop.tv_usec - start.tv_usec)/(float)1000000);
 
-		printf("Difference: %f, Iteration: %d\n", diff/(my_grid->num_elements), num_iter);
+		//printf("Difference: %f, Iteration: %d\n", diff/(my_grid->num_elements), num_iter);
 
 		diff=0;
 		num_iter++;
@@ -245,7 +242,10 @@ compute_on_device(GRID_STRUCT *my_grid)
 	cudaFree(grid2_d);
 	cudaFree(diff_d);
 	
-	//cudaUnbindTexture(inputTex2D);
+	/*cudaUnbindTexture(inputTex1D);
+	cudaUnbindTexture(outputTex1D);
+	cudaUnbindTexture(diffTex1D); */
+
 	
 	free(grid2_h);
 }

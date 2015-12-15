@@ -49,7 +49,7 @@ main(int argc, char** argv)
 
 	int status = compute_gold(reference.elements, A.elements, A.num_rows);
 	
-	print_matrix(A);
+	print_matrix(reference);
 	
 	if(status == 0){
 		printf("Failed to convert given matrix to upper triangular. Try again. Exiting. \n");
@@ -102,6 +102,8 @@ gauss_eliminate_on_device(const Matrix A, Matrix U){
 		gauss_eliminate_kernel<<< grid, threadBlock >>>(A_d.elements, U_d.elements, i, k ,offset);
 		k++;
 	}
+	
+	copy_matrix_from_device(U, U_d);
 }
 
 // Allocate a device matrix of same size as M.

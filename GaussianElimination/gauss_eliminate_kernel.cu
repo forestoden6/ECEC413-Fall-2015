@@ -23,7 +23,7 @@ __global__ void gauss_eliminate_kernel(const float* A, float *U, int current_row
 		U[tx + row] = 1;
 		
 	
-	if(tx < k)
+	/*if(tx < k)
 	{
 		U[tx + row] = 0;
 	}
@@ -34,6 +34,19 @@ __global__ void gauss_eliminate_kernel(const float* A, float *U, int current_row
 		{
 			U[tx + row +(i* MATRIX_SIZE)] = U[tx + row + (i* MATRIX_SIZE)] - (U[k + row +(i* MATRIX_SIZE)] * U[(k * MATRIX_SIZE) + tx]);
 		}
+	}*/
+	
+	for(int i = (k+1); i < MATRIX_SIZE; i++)
+	{
+		if(tx > k)
+		{
+			U[tx + (i* MATRIX_SIZE)] = U[tx + (i* MATRIX_SIZE)] - (U[k + (i* MATRIX_SIZE)] * U[(k * MATRIX_SIZE) + tx]);
+		}
+	}
+
+	if(tx < k)
+	{
+		U[tx + row] = 0;
 	}
 	
 }

@@ -46,10 +46,16 @@ main(int argc, char** argv)
 
 	// Perform Gaussian elimination on the CPU 
 	Matrix reference = allocate_matrix(MATRIX_SIZE, MATRIX_SIZE, 0);
+	
+	struct timeval start, stop;	
+	gettimeofday(&start, NULL);
 
 	int status = compute_gold(reference.elements, A.elements, A.num_rows);
 	
-	print_matrix(reference);
+	gettimeofday(&stop, NULL);
+	printf("Execution time = %fs. \n", (float)(stop.tv_sec - start.tv_sec + (stop.tv_usec - start.tv_usec)/(float)1000000));
+	
+	//print_matrix(reference);
 	
 	if(status == 0){
 		printf("Failed to convert given matrix to upper triangular. Try again. Exiting. \n");
@@ -65,7 +71,7 @@ main(int argc, char** argv)
 	// Perform the vector-matrix multiplication on the GPU. Return the result in U
 	gauss_eliminate_on_device(A, U);
     
-	print_matrix(U);
+	//print_matrix(U);
 	
 	// check if the device result is equivalent to the expected solution
 	int num_elements = MATRIX_SIZE*MATRIX_SIZE;
@@ -97,13 +103,22 @@ gauss_eliminate_on_device(const Matrix A, Matrix U){
 	int offset = 0;
 	int k = 0;
 	
+	struct timeval start, stop;	
+	gettimeofday(&start, NULL);
+	
 	for(int i = 0; i < MATRIX_SIZE; i++)
 	{
 		gauss_eliminate_kernel<<< grid, threadBlock >>>(A_d.elements, U_d.elements, i, k ,offset);
 		k++;
 	}
 	
+	gettimeofday(&stop, NULL);
+	printf("Execution time = %fs. \n", (float)(stop.tv_sec - start.tv_sec + (stop.tv_usec - start.tv_usec)/(float)1000000));
+	
 	copy_matrix_from_device(U, U_d);
+	
+	cudaFree(A_d.elements);
+	cudaFree(U_d.elements);
 }
 
 // Allocate a device matrix of same size as M.
